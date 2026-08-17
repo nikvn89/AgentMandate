@@ -3,7 +3,6 @@
 
 from genlayer import *
 import json
-from datetime import datetime
 
 
 @gl.evm.contract_interface
@@ -12,7 +11,12 @@ class _NativeRecipient:
         pass
 
     class Write:
-        pass
+        def emit_transfer(
+            self,
+            value: u256,
+            /
+        ) -> None:
+            ...
 
 
 class AgentMandate(gl.Contract):
@@ -192,18 +196,95 @@ class AgentMandate(gl.Contract):
     def _chain_unix(self) -> int:
 
         raw = self._chain_iso()
-        normalized = raw
 
-        if normalized.endswith("Z"):
-            normalized = normalized[:-1] + "+00:00"
+        if len(raw) < 19:
+            raise gl.vm.UserError(
+                "Invalid chain datetime"
+            )
 
         try:
-            dt = datetime.fromisoformat(normalized)
-            return int(dt.timestamp())
+            year = int(raw[0:4])
+            month = int(raw[5:7])
+            day = int(raw[8:10])
+
+            hour = int(raw[11:13])
+            minute = int(raw[14:16])
+            second = int(raw[17:19])
+
         except Exception:
             raise gl.vm.UserError(
                 "Invalid chain datetime"
             )
+
+        if month < 1 or month > 12:
+            raise gl.vm.UserError(
+                "Invalid chain datetime"
+            )
+
+        if day < 1 or day > 31:
+            raise gl.vm.UserError(
+                "Invalid chain datetime"
+            )
+
+        if hour < 0 or hour > 23:
+            raise gl.vm.UserError(
+                "Invalid chain datetime"
+            )
+
+        if minute < 0 or minute > 59:
+            raise gl.vm.UserError(
+                "Invalid chain datetime"
+            )
+
+        if second < 0 or second > 59:
+            raise gl.vm.UserError(
+                "Invalid chain datetime"
+            )
+
+        y = year
+        m = month
+        d = day
+
+        if m <= 2:
+            y -= 1
+
+        if y >= 0:
+            era = y // 400
+        else:
+            era = (y - 399) // 400
+
+        yoe = y - era * 400
+
+        if m > 2:
+            mp = m - 3
+        else:
+            mp = m + 9
+
+        doy = (
+            (153 * mp + 2) // 5
+            + d
+            - 1
+        )
+
+        doe = (
+            yoe * 365
+            + yoe // 4
+            - yoe // 100
+            + doy
+        )
+
+        days = (
+            era * 146097
+            + doe
+            - 719468
+        )
+
+        return (
+            days * 86400
+            + hour * 3600
+            + minute * 60
+            + second
+        )
 
     def _fence_strip(
         self,
